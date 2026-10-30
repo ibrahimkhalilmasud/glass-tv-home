@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Settings</string>
+    <string name="no_settings">This TV has no system Settings screen.</string>
+</resources>

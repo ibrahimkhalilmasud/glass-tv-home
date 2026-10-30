@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="referrer" content="no-referrer">
+<title>TV Remote</title>
+<style>
+  :root { --ink: #f5f3ee; --soft: rgba(245,243,238,0.65); --edge: rgba(255,255,255,0.16); --accent: #f3e6c8; --bad: #ffb4a8; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    padding: 20px 18px 36px; color: var(--ink);
+    font-family: system-ui, -apple-system, "Roboto", sans-serif;
+    background: radial-gradient(120% 70% at 20% 0%, #26405a 0%, #0b1018 62%, #06080c 100%) fixed;
+  }
+  main { max-width: 420px; margin: 0 auto; }
+  h1 { font-weight: 300; font-size: 22px; margin: 0 0 4px; letter-spacing: 0.04em; }
+  .status { min-height: 20px; font-size: 14px; color: var(--soft); margin-bottom: 18px; }
+  .status.bad { color: var(--bad); }
+  .glass { background: rgba(255,255,255,0.07); border: 1px solid var(--edge); border-radius: 28px; }
+  button {
+    font: inherit; color: var(--ink); background: rgba(255,255,255,0.09); border: 1px solid var(--edge);
+    border-radius: 18px; padding: 0; height: 56px; font-size: 18px; touch-action: manipulation;
+  }
+  button:active, button.on { background: rgba(243,230,200,0.3); border-color: rgba(243,230,200,0.7); }
+  .pad { position: relative; width: 264px; height: 264px; margin: 6px auto 22px; border-radius: 50%; }
+  .pad button { position: absolute; width: 84px; height: 84px; border-radius: 50%; font-size: 26px; }
+  .pad .u { top: 8px; left: 90px; } .pad .d { bottom: 8px; left: 90px; }
+  .pad .l { left: 8px; top: 90px; } .pad .r { right: 8px; top: 90px; }
+  .pad .ok { left: 90px; top: 90px; background: rgba(243,230,200,0.22); font-size: 20px; }
+  .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+  .row.four { grid-template-columns: repeat(4, 1fr); }
+  .label { font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--soft); margin: 22px 0 10px; }
+  .apps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .apps button { height: 52px; font-size: 16px; }
+  .panel { padding: 22px 16px 14px; }
+  .typebox { display: flex; gap: 10px; margin-top: 4px; }
+  #typed {
+    flex: 1; min-width: 0; font: inherit; font-size: 18px; color: var(--ink); padding: 14px 16px; height: 56px;
+    background: rgba(0,0,0,0.28); border: 1px solid var(--edge); border-radius: 18px; outline: none;
+    user-select: text; -webkit-user-select: text;
+  }
+  #typed:focus { border-color: rgba(243,230,200,0.7); }
+  .typebox button { width: 88px; flex: none; }
+  .hint { font-size: 13px; color: var(--soft); margin: 8px 4px 0; line-height: 1.4; }
+</style>
+</head>
+<body>
+<main>
+  <h1>TV Remote</h1>
+  <div class="status" id="status">Ready</div>
+
+  <div class="glass panel">
+    <div class="pad">
+      <button class="u" data-key="up" data-hold>▲</button>
+      <button class="l" data-key="left" data-hold>◀</button>
+      <button class="ok" data-key="ok">OK</button>
+      <button class="r" data-key="right" data-hold>▶</button>
+      <button class="d" data-key="down" data-hold>▼</button>
+    </div>
+    <div class="row">
+      <button data-key="back">Back</button>
+      <button data-key="home">Home</button>
+      <button data-key="menu">Menu</button>
+    </div>
+    <div class="row four">
+      <button data-key="voldown" data-hold>Vol −</button>
+      <button data-key="volup" data-hold>Vol +</button>
+      <button data-key="mute">Mute</button>
+      <button data-key="playpause">▶︎❙❙</button>
+    </div>
+    <div class="row four">
+      <button data-key="rewind">⏪</button>
+      <button data-key="forward">⏩</button>
+      <button data-key="search">Search</button>
+      <button data-key="power">Power</button>
+    </div>
+  </div>
+
+  <div class="label">Type on TV</div>
+  <div class="typebox">
+    <input id="typed" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+           enterkeyhint="search" placeholder="Type here, it appears on the TV">
+    <button id="typeGo">Search</button>
+  </div>
+  <div class="hint">On the TV, open the search box first (for example YouTube &rsaquo; Search). Everything you type here
+    appears there as you type. <b id="typeClear" style="text-decoration: underline;">Clear</b></div>
+
+  <div class="label">Open an app</div>
+  <div class="apps">
+    <button data-app="com.google.android.youtube.tv">YouTube</button>
+    <button data-app="com.netflix.ninja">Netflix</button>
+    <button data-app="in.startv.hotstar">Hotstar</button>
+    <button data-app="com.purple.iptv.smart.player">Purple IPTV</button>
+    <button data-app="com.amazon.amazonvideo.livingroom">Prime Video</button>
+    <button data-app="com.mytvhome.hub">TV Hub</button>
+  </div>
+</main>
+<script>
+(function () {
+  'use strict';
+  var HOLD_DELAY_MS = 450, HOLD_REPEAT_MS = 180;
+  // The secret lives after the # so it is never sent in a request line or logged by the TV.
+  var token = (location.hash || '').replace(/^#/, '');
+  var statusEl = document.getElementById('status');
+  var busy = false;
+
+  function say(msg, bad) { statusEl.textContent = msg; statusEl.className = 'status' + (bad ? ' bad' : ''); }
+  if (!/^[0-9a-f]{32}$/.test(token)) say('Scan the QR code on the TV to open this remote.', true);
+
+  function send(path, body) {
+    if (!token) return Promise.resolve(false);
+    if (navigator.vibrate) navigator.vibrate(12);
+    return fetch(path, { method: 'POST', headers: { 'X-Remote': token, 'Content-Type': 'text/plain' }, body: body })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+      .then(function (res) {
+        if (res.ok) { say('Ready'); return true; }
+        say(res.body.error || 'The TV refused that.', true);
+        return false;
+      })
+      .catch(function () { say('Cannot reach the TV. Same Wi-Fi? Is the TV on?', true); return false; });
+  }
+
+  function press(key) {
+    if (busy) return Promise.resolve(false);
+    busy = true;
+    return send('/key', key).then(function (ok) { busy = false; return ok; });
+  }
+
+  /* ---- live typing: send only what changed since the last successful send ---- */
+  var typed = document.getElementById('typed'), sentText = '', typing = false, again = false;
+  function syncText() {
+    if (typing) { again = true; return; }
+    var cur = typed.value, i = 0;
+    while (i < sentText.length && i < cur.length && sentText.charAt(i) === cur.charAt(i)) i++;
+    var del = sentText.length - i, add = cur.slice(i);
+    if (!del && !add) return;
+    typing = true;
+    send('/text', JSON.stringify({ del: del, add: add })).then(function (ok) {
+      typing = false;
+      if (ok) sentText = cur;
+      if (ok && (again || typed.value !== sentText)) { again = false; syncText(); }
+    });
+  }
+  typed.addEventListener('input', syncText);
+  typed.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('typeGo').click(); } });
+  document.getElementById('typeGo').addEventListener('click', function () {
+    send('/key', 'enter').then(function (ok) { if (ok) { typed.value = ''; sentText = ''; } });
+  });
+  document.getElementById('typeClear').addEventListener('click', function () {
+    var n = Math.max(sentText.length, typed.value.length);
+    typed.value = '';
+    send('/text', JSON.stringify({ del: Math.min(n, 200), add: '' })).then(function (ok) { if (ok) sentText = ''; });
+  });
+
+  document.querySelectorAll('button[data-app]').forEach(function (b) {
+    b.addEventListener('click', function () { say('Opening…'); send('/app', b.getAttribute('data-app')); });
+  });
+
+  document.querySelectorAll('button[data-key]').forEach(function (b) {
+    var key = b.getAttribute('data-key'), repeat = b.hasAttribute('data-hold'), delay = null, timer = null;
+    function stop() { clearTimeout(delay); clearInterval(timer); delay = timer = null; b.classList.remove('on'); }
+    b.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      press(key);
+      if (!repeat) return;
+      b.classList.add('on');
+      delay = setTimeout(function () { timer = setInterval(function () { press(key); }, HOLD_REPEAT_MS); }, HOLD_DELAY_MS);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) { b.addEventListener(t, stop); });
+    b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  });
+})();
+</script>
+</body>
+</html>

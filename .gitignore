@@ -1,0 +1,13 @@
+# Private: device backups, screenshots, notes, signing keys, local config
+backup/
+shots/
+work/
+keys/
+*.keystore
+*.jks
+.env
+.env.*
+!.env.example
+local.properties
+**/build/
+.gradle/

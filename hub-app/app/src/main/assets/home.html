@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+  // Lay the page out at 1920x1080 and zoom it to whatever CSS viewport the TV reports (960 wide at 2x density).
+  (function fit() {
+    document.documentElement.style.zoom = String(window.innerWidth / 1920);
+    window.addEventListener('resize', fit, { once: true });
+  })();
+</script>
+<title>TV Hub</title>
+<style>
+  @font-face { font-family: "Outfit"; src: url("outfit.ttf"); font-weight: 100 900; }
+  :root {
+    --ink: #f5f3ee;
+    --ink-soft: rgba(245, 243, 238, 0.72);
+    --ink-faint: rgba(245, 243, 238, 0.5);
+    --glass: rgba(18, 24, 32, 0.42);
+    --glass-strong: rgba(14, 18, 26, 0.78);
+    --edge: rgba(255, 255, 255, 0.16);
+    --focus: rgba(255, 255, 255, 0.95);
+    --accent: #f3e6c8;
+    --warn: #ffcf8a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; width: 1920px; height: 1080px; overflow: hidden;
+    background: #05070c; color: var(--ink);
+    font-family: "Outfit", "Roboto", "Noto Sans", sans-serif;
+  }
+  .bg {
+    position: fixed; inset: 0;
+    background: url("bg.jpg") center / cover no-repeat;
+    transform: scale(1.04);
+  }
+  .bg::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(5,7,12,0.55) 0%, rgba(5,7,12,0.1) 35%, rgba(5,7,12,0.2) 60%, rgba(5,7,12,0.82) 100%);
+  }
+  .glass {
+    background: var(--glass);
+    border: 1.5px solid var(--edge);
+    border-radius: 28px;
+    -webkit-backdrop-filter: blur(22px) saturate(1.2);
+    backdrop-filter: blur(22px) saturate(1.2);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  .no-blur .glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-strong); }
+
+  main { position: relative; height: 100%; padding: 84px 112px 96px; display: flex; flex-direction: column; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; }
+  .greeting { font-size: 26px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--ink-soft); }
+  .clock { font-size: 168px; font-weight: 200; line-height: 1; letter-spacing: -0.02em; margin-top: 18px; }
+  .date { font-size: 32px; font-weight: 300; color: var(--ink-soft); margin-top: 14px; letter-spacing: 0.04em; }
+
+  .weather { width: 560px; padding: 30px 36px; }
+  .w-top { display: flex; align-items: center; gap: 22px; }
+  .w-icon { font-size: 74px; line-height: 1; }
+  .w-temp { font-size: 84px; font-weight: 200; line-height: 1; }
+  .w-meta { margin-left: auto; text-align: right; }
+  .w-city { font-size: 28px; font-weight: 400; }
+  .w-desc { font-size: 22px; color: var(--ink-soft); margin-top: 6px; }
+  .w-days { display: flex; justify-content: space-between; margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--edge); }
+  .w-day { text-align: center; font-size: 22px; color: var(--ink-soft); width: 25%; }
+  .w-day b { display: block; font-weight: 400; color: var(--ink); font-size: 20px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .w-day span { display: block; font-size: 34px; margin: 8px 0; }
+  .w-status { font-size: 18px; color: var(--ink-faint); margin-top: 16px; text-align: right; }
+  .w-status.stale { color: var(--warn); }
+
+  .cards { margin-top: auto; display: flex; gap: 36px; }
+  .card {
+    width: 390px; height: 230px; padding: 34px 34px; display: flex; flex-direction: column; justify-content: flex-end;
+    outline: none; transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+  }
+  .card .title { font-size: 40px; font-weight: 400; }
+  .card .sub { font-size: 22px; color: var(--ink-soft); margin-top: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .glyph { font-size: 44px; margin-bottom: auto; opacity: 0.9; }
+  .focusable:focus { outline: none; }
+  .card:focus, .btn:focus, .chip:focus, input:focus {
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px var(--focus), 0 24px 60px rgba(0,0,0,0.4);
+  }
+  .card:focus { transform: translateY(-8px) scale(1.03); background: rgba(40, 52, 66, 0.55); }
+  .no-blur .card:focus { background: rgba(40, 52, 66, 0.9); }
+
+  .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(3,5,9,0.55); }
+  .overlay.open { display: flex; }
+  .panel { width: 1180px; padding: 56px 64px; background: var(--glass-strong); }
+  .panel h2 { margin: 0 0 30px; font-size: 46px; font-weight: 300; }
+  .panel p { font-size: 26px; color: var(--ink-soft); line-height: 1.5; margin: 0 0 18px; }
+  .row { display: flex; gap: 20px; align-items: center; margin: 18px 0; flex-wrap: wrap; }
+  .label { font-size: 22px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); margin-top: 30px; }
+  input {
+    flex: 1; min-width: 600px; font: inherit; font-size: 30px; color: var(--ink); padding: 18px 24px;
+    background: rgba(255,255,255,0.08); border: 1.5px solid var(--edge); border-radius: 18px; outline: none;
+  }
+  .btn, .chip {
+    font: inherit; font-size: 28px; color: var(--ink); padding: 18px 32px; border-radius: 999px;
+    background: rgba(255,255,255,0.1); border: 1.5px solid var(--edge); outline: none;
+  }
+  .btn.primary { background: rgba(243, 230, 200, 0.22); }
+  .chip.on { background: rgba(243, 230, 200, 0.3); border-color: rgba(243,230,200,0.7); }
+  .big { font-size: 64px; font-weight: 300; color: var(--accent); letter-spacing: 0.02em; margin: 6px 0 22px; }
+  .code { font-size: 96px; font-weight: 300; letter-spacing: 0.24em; color: var(--accent); }
+  .note { font-size: 22px; color: var(--warn); }
+  .results { display: flex; flex-wrap: wrap; gap: 16px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%) translateY(30px); opacity: 0;
+    padding: 22px 36px; font-size: 28px; transition: opacity 250ms ease, transform 250ms ease;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce) { .card, .toast { transition: none; } }
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<main>
+  <header>
+    <div>
+      <div class="greeting" id="greeting">Good evening</div>
+      <div class="clock" id="clock">--:--</div>
+      <div class="date" id="date"></div>
+    </div>
+    <section class="weather glass" id="weather" aria-live="polite">
+      <div class="w-top">
+        <div class="w-icon" id="wIcon">·</div>
+        <div class="w-temp" id="wTemp">--°</div>
+        <div class="w-meta">
+          <div class="w-city" id="wCity">Weather</div>
+          <div class="w-desc" id="wDesc">Loading…</div>
+        </div>
+      </div>
+      <div class="w-days" id="wDays"></div>
+      <div class="w-status" id="wStatus"></div>
+    </section>
+  </header>
+
+  <nav class="cards">
+    <div class="card glass focusable" tabindex="0" id="cardDashboard" data-action="dashboard">
+      <div class="glyph">◎</div>
+      <div class="title">Agents Dashboard</div>
+      <div class="sub" id="dashSub">Set the address in Settings</div>
+    </div>
+    <div class="card glass focusable" tabindex="0" id="cardRemote" data-action="remote">
+      <div class="glyph">▤</div>
+      <div class="title">Phone remote</div>
+      <div class="sub">Scan a QR code to control the TV</div>
+    </div>
+    <div class="card glass focusable" tabindex="0" id="cardPhoto" data-action="photo">
+      <div class="glyph">▣</div>
+      <div class="title">Send a photo</div>
+      <div class="sub">From your phone to the Home wallpaper</div>
+    </div>
+    <div class="card glass focusable" tabindex="0" id="cardSettings" data-action="settings">
+      <div class="glyph">⚙</div>
+      <div class="title">Settings</div>
+      <div class="sub" id="settingsSub">Dashboard address · weather city</div>
+    </div>
+  </nav>
+</main>
+
+<div class="overlay" id="photoOverlay">
+  <section class="panel glass">
+    <h2>Send a photo from your phone</h2>
+    <p>On a phone on the same Wi-Fi, open this address in the browser:</p>
+    <div class="big" id="photoUrl">…</div>
+    <p>Then enter this code:</p>
+    <div class="code" id="photoCode">------</div>
+    <p id="photoNote" class="note"></p>
+    <p>The photo is added to the Home wallpapers. To keep it on screen, open the Home screen's settings and choose it under <b>Wallpaper</b>.</p>
+    <div class="row"><button class="btn primary focusable" id="photoClose">Done</button></div>
+  </section>
+</div>
+
+<div class="overlay" id="remoteOverlay">
+  <section class="panel glass">
+    <h2>Control the TV from your phone</h2>
+    <div style="display: flex; gap: 64px; align-items: center;">
+      <div style="background: #fff; padding: 20px; border-radius: 24px; line-height: 0;">
+        <img id="qrImg" alt="QR code for the phone remote" width="360" height="360" style="width: 360px; height: 360px;">
+      </div>
+      <div>
+        <p>1. Connect the phone to the same Wi-Fi as the TV.</p>
+        <p>2. Scan the code with the phone's camera and open the link.</p>
+        <p>3. Use the buttons: arrows, OK, Back, Home, volume and your apps.</p>
+        <p class="note" id="remoteUrl"></p>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn primary focusable" id="remoteClose">Done</button>
+      <button class="btn focusable" id="remoteReset">New link (signs out all phones)</button>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="settingsOverlay">
+  <section class="panel glass">
+    <h2>Settings</h2>
+    <div class="label">Agents dashboard address</div>
+    <div class="row">
+      <input class="focusable" id="dashInput" type="url" placeholder="http://192.168.1.20:3000" autocomplete="off" spellcheck="false">
+      <button class="btn primary focusable" id="dashSave">Save</button>
+    </div>
+    <div class="label">Weather location</div>
+    <div class="row">
+      <button class="chip focusable" id="modeAuto">Automatic (by network)</button>
+      <button class="chip focusable" id="modeManual">Choose a city</button>
+    </div>
+    <div class="row" id="cityRow">
+      <input class="focusable" id="cityInput" type="text" placeholder="City name, e.g. Penang" autocomplete="off" spellcheck="false">
+      <button class="btn focusable" id="citySearch">Search</button>
+    </div>
+    <div class="results" id="cityResults"></div>
+    <div class="row" style="margin-top: 36px;"><button class="btn primary focusable" id="settingsClose">Close</button></div>
+  </section>
+</div>
+
+<div class="toast glass" id="toast"></div>
+
+<script src="qr.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  var DEFAULT_CITY = { name: 'Kuala Lumpur', lat: 3.139, lon: 101.6869 };
+  var WEATHER_REFRESH_MS = 30 * 60 * 1000;
+  var WEATHER_TIMEOUT_MS = 10000;
+  var CACHE_KEY = 'weatherCache';
+  var hub = window.Hub || {
+    get: function (k) { return localStorage.getItem('pref_' + k) || ''; },
+    set: function (k, v) { localStorage.setItem('pref_' + k, v); },
+    openDashboard: function () { return false; },
+    photoInfo: function () { return '{"url":"http://192.168.1.50:8090","code":"123456","running":true,"canWrite":true}'; }
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  // Blur is costly on some TV GPUs; ?noblur or the saved choice switches to solid glass.
+  if (/noblur/.test(location.search) || hub.get('no_blur') === '1') document.documentElement.classList.add('no-blur');
+
+  /* ---------- clock ---------- */
+  function tick() {
+    var now = new Date();
+    var h = now.getHours();
+    $('clock').textContent = pad(h) + ':' + pad(now.getMinutes());
+    $('date').textContent = now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+    $('greeting').textContent = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  tick();
+  setInterval(tick, 1000 * 15);
+
+  /* ---------- weather ---------- */
+  var WMO = [
+    [[0], 'Clear', '☀️', '🌙'], [[1], 'Mainly clear', '🌤️', '🌙'], [[2], 'Partly cloudy', '⛅', '☁️'],
+    [[3], 'Overcast', '☁️', '☁️'], [[45, 48], 'Fog', '🌫️', '🌫️'], [[51, 53, 55, 56, 57], 'Drizzle', '🌦️', '🌧️'],
+    [[61, 63, 65, 66, 67], 'Rain', '🌧️', '🌧️'], [[71, 73, 75, 77], 'Snow', '❄️', '❄️'],
+    [[80, 81, 82], 'Showers', '🌦️', '🌧️'], [[85, 86], 'Snow showers', '🌨️', '🌨️'],
+    [[95, 96, 99], 'Thunderstorm', '⛈️', '⛈️']
+  ];
+  function wmo(code, isDay) {
+    for (var i = 0; i < WMO.length; i++) {
+      if (WMO[i][0].indexOf(code) >= 0) return { text: WMO[i][1], icon: isDay === 0 ? WMO[i][3] : WMO[i][2] };
+    }
+    return { text: 'Weather', icon: '·' };
+  }
+
+  function fetchJson(url) {
+    var ctl = new AbortController();
+    var timer = setTimeout(function () { ctl.abort(); }, WEATHER_TIMEOUT_MS);
+    return fetch(url, { signal: ctl.signal, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .finally(function () { clearTimeout(timer); });
+  }
+
+  function savedCity() {
+    try { var c = JSON.parse(hub.get('weather_city') || 'null'); if (c && c.name) return c; } catch (e) { /* fall through */ }
+    return DEFAULT_CITY;
+  }
+  function weatherMode() { return hub.get('weather_mode') || 'auto'; }
+
+  // City-level location from the network address; never a precise position.
+  function detectCity() {
+    return fetchJson('https://ipapi.co/json/').then(function (j) {
+      if (!j.city || typeof j.latitude !== 'number') throw new Error('no city');
+      return { name: j.city, lat: j.latitude, lon: j.longitude };
+    }).catch(function () {
+      return fetchJson('https://ipwho.is/').then(function (j) {
+        if (!j.success || !j.city) throw new Error('no city');
+        return { name: j.city, lat: j.latitude, lon: j.longitude };
+      });
+    });
+  }
+
+  function forecastUrl(c) {
+    return 'https://api.open-meteo.com/v1/forecast?latitude=' + c.lat.toFixed(3) + '&longitude=' + c.lon.toFixed(3) +
+      '&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min' +
+      '&timezone=auto&forecast_days=4';
+  }
+
+  function renderWeather(cache, stale) {
+    var d = cache.data, cur = d.current, w = wmo(cur.weather_code, cur.is_day);
+    $('wIcon').textContent = w.icon;
+    $('wTemp').textContent = Math.round(cur.temperature_2m) + '°';
+    $('wCity').textContent = cache.city.name;
+    $('wDesc').textContent = w.text + ' · ' + Math.round(d.daily.temperature_2m_max[0]) + '° / ' + Math.round(d.daily.temperature_2m_min[0]) + '°';
+    var html = '';
+    for (var i = 1; i < d.daily.time.length; i++) {
+      var day = new Date(d.daily.time[i] + 'T12:00:00');
+      var dw = wmo(d.daily.weather_code[i], 1);
+      html += '<div class="w-day"><b>' + day.toLocaleDateString(undefined, { weekday: 'short' }) + '</b><span>' + dw.icon +
+        '</span>' + Math.round(d.daily.temperature_2m_max[i]) + '° · ' + Math.round(d.daily.temperature_2m_min[i]) + '°</div>';
+    }
+    $('wDays').innerHTML = html;
+    var at = new Date(cache.at);
+    $('wStatus').textContent = (stale ? 'Offline · last updated ' : 'Updated ') + pad(at.getHours()) + ':' + pad(at.getMinutes()) +
+      (weatherMode() === 'auto' ? ' · auto location' : '');
+    $('wStatus').className = 'w-status' + (stale ? ' stale' : '');
+  }
+
+  function readCache() {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (e) { return null; }
+  }
+
+  var weatherBusy = false;
+  function refreshWeather(force) {
+    var cache = readCache();
+    if (cache) renderWeather(cache, Date.now() - cache.at > 2 * WEATHER_REFRESH_MS);
+    if (weatherBusy || (!force && cache && Date.now() - cache.at < WEATHER_REFRESH_MS)) return;
+    weatherBusy = true;
+    var cityPromise = weatherMode() === 'auto'
+      ? detectCity().then(function (c) { hub.set('weather_city', JSON.stringify(c)); return c; }).catch(savedCity)
+      : Promise.resolve(savedCity());
+    cityPromise.then(function (city) {
+      return fetchJson(forecastUrl(city)).then(function (data) {
+        var fresh = { city: city, data: data, at: Date.now() };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(fresh));
+        renderWeather(fresh, false);
+      });
+    }).catch(function () {
+      if (cache) renderWeather(cache, true);
+      else { $('wDesc').textContent = 'Weather unavailable offline'; $('wStatus').textContent = 'Will retry'; }
+    }).finally(function () { weatherBusy = false; });
+  }
+  refreshWeather(false);
+  setInterval(function () { refreshWeather(true); }, WEATHER_REFRESH_MS);
+
+  /* ---------- dashboard card ---------- */
+  function updateDashCard() {
+    var url = hub.get('dashboard_url');
+    $('dashSub').textContent = url ? url.replace(/^https?:\/\//, '') : 'Set the address in Settings';
+  }
+  updateDashCard();
+  var err = /[?&]error=([^&]*)/.exec(location.search);
+  if (err) setTimeout(function () { toast('Dashboard did not open: ' + decodeURIComponent(err[1])); }, 400);
+
+  /* ---------- focus and remote keys ---------- */
+  var openOverlay = null, lastOpener = null;
+
+  function focusables() {
+    var root = openOverlay || document.querySelector('main');
+    return Array.prototype.filter.call(root.querySelectorAll('.focusable'), function (el) {
+      return el.offsetParent !== null && !el.disabled;
+    });
+  }
+
+  // Move to the nearest element in the pressed direction, favouring ones in line with the current one.
+  function move(dir) {
+    var list = focusables(), cur = document.activeElement;
+    if (list.indexOf(cur) < 0) { if (list[0]) list[0].focus(); return; }
+    var a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2, best = null, bestScore = Infinity;
+    list.forEach(function (el) {
+      if (el === cur) return;
+      var b = el.getBoundingClientRect(), bx = b.left + b.width / 2, by = b.top + b.height / 2;
+      var dx = bx - ax, dy = by - ay;
+      var main = dir === 'left' ? -dx : dir === 'right' ? dx : dir === 'up' ? -dy : dy;
+      var cross = dir === 'left' || dir === 'right' ? Math.abs(dy) : Math.abs(dx);
+      if (main <= 4) return;
+      var score = main + cross * 2.5;
+      if (score < bestScore) { bestScore = score; best = el; }
+    });
+    if (best) best.focus();
+  }
+
+  function activate(el) {
+    var action = el.getAttribute('data-action');
+    if (action === 'dashboard') {
+      if (!hub.openDashboard()) { toast('Add your dashboard address in Settings first'); openPanel('settingsOverlay', el); }
+    } else if (action === 'remote') {
+      openPanel('remoteOverlay', el);
+    } else if (action === 'photo') {
+      openPanel('photoOverlay', el);
+    } else if (action === 'settings') {
+      openPanel('settingsOverlay', el);
+    } else {
+      el.click();
+    }
+  }
+
+  document.addEventListener('keydown', function (e) {
+    var k = e.key, el = document.activeElement, typing = el && el.tagName === 'INPUT';
+    var dir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[k];
+    if (dir) {
+      if (typing && (dir === 'left' || dir === 'right')) return;  // move the caret inside the field
+      e.preventDefault(); move(dir); return;
+    }
+    if ((k === 'Enter' || k === ' ') && el && el.classList.contains('card')) { e.preventDefault(); activate(el); }
+  });
+
+  document.querySelectorAll('.card').forEach(function (c) { c.addEventListener('click', function () { activate(c); }); });
+
+  /* ---------- overlays ---------- */
+  function openPanel(id, opener) {
+    openOverlay = $(id);
+    lastOpener = opener || document.activeElement;
+    openOverlay.classList.add('open');
+    if (id === 'photoOverlay') fillPhotoPanel();
+    if (id === 'remoteOverlay') fillRemotePanel();
+    if (id === 'settingsOverlay') fillSettings();
+    var first = focusables()[0];
+    if (id === 'settingsOverlay') first = $('dashSave');
+    if (first) first.focus();
+  }
+  function closePanel() {
+    if (!openOverlay) return false;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    openOverlay.classList.remove('open');
+    openOverlay = null;
+    if (lastOpener) lastOpener.focus();
+    return true;
+  }
+  // Called by the app on the remote's Back key; true means the page handled it.
+  window.hubBack = function () {
+    if (document.activeElement && document.activeElement.tagName === 'INPUT') { document.activeElement.blur(); move('down'); return true; }
+    return closePanel();
+  };
+  window.hubResume = function () { tick(); updateDashCard(); refreshWeather(false); if (openOverlay === $('photoOverlay')) fillPhotoPanel(); };
+
+  /* ---------- phone remote panel ---------- */
+  function fillRemotePanel() {
+    var info = {};
+    try { info = JSON.parse(hub.remoteInfo()); } catch (e) { /* keep defaults */ }
+    if (!info.url) {
+      $('qrImg').removeAttribute('src');
+      $('remoteUrl').textContent = 'No network connection';
+      return;
+    }
+    var qr = qrcode(0, 'M');
+    qr.addData(info.url);
+    qr.make();
+    $('qrImg').src = qr.createDataURL(8, 2);
+    $('remoteUrl').textContent = info.running === false ? 'The remote is not running. Restart the TV.' : '';
+  }
+  $('remoteClose').addEventListener('click', closePanel);
+  $('remoteReset').addEventListener('click', function () {
+    hub.resetRemote();
+    fillRemotePanel();
+    toast('New link created. Phones that used the old code are signed out.');
+  });
+
+  /* ---------- photo panel ---------- */
+  function fillPhotoPanel() {
+    var info = {};
+    try { info = JSON.parse(hub.photoInfo()); } catch (e) { /* keep defaults */ }
+    $('photoUrl').textContent = info.url || 'No network connection';
+    $('photoCode').textContent = info.code || '------';
+    $('photoNote').textContent = info.canWrite === false
+      ? 'One-time setup needed: run the photo setup command from the README on the laptop.'
+      : info.running === false ? 'The photo receiver is not running; close and reopen TV Hub.' : '';
+  }
+  $('photoClose').addEventListener('click', closePanel);
+  window.hubPhoto = function () { toast('Photo received. Choose it under Wallpaper in the Home settings.'); };
+  window.hubCodeChanged = function () { if (openOverlay === $('photoOverlay')) fillPhotoPanel(); toast('Too many wrong codes, so the code changed.'); };
+
+  /* ---------- settings panel ---------- */
+  function fillSettings() {
+    $('dashInput').value = hub.get('dashboard_url');
+    var auto = weatherMode() === 'auto';
+    $('modeAuto').classList.toggle('on', auto);
+    $('modeManual').classList.toggle('on', !auto);
+    $('cityRow').style.display = auto ? 'none' : 'flex';
+    $('cityResults').innerHTML = '';
+    if (!auto) $('cityInput').value = savedCity().name;
+  }
+  $('dashSave').addEventListener('click', function () {
+    var v = $('dashInput').value.trim();
+    if (v && !/^https?:\/\//i.test(v)) v = 'http://' + v;
+    if (v && !/^https?:\/\/[^\s/]+/i.test(v)) { toast('That address does not look right'); return; }
+    hub.set('dashboard_url', v);
+    $('dashInput').value = v;
+    updateDashCard();
+    toast(v ? 'Dashboard address saved' : 'Dashboard address cleared');
+  });
+  $('modeAuto').addEventListener('click', function () {
+    hub.set('weather_mode', 'auto'); fillSettings(); $('modeAuto').focus(); refreshWeather(true);
+  });
+  $('modeManual').addEventListener('click', function () {
+    hub.set('weather_mode', 'manual'); fillSettings(); $('cityInput').focus();
+  });
+  $('citySearch').addEventListener('click', function () {
+    var q = $('cityInput').value.trim();
+    if (!q) return;
+    $('cityResults').innerHTML = '<p>Searching…</p>';
+    fetchJson('https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&name=' + encodeURIComponent(q))
+      .then(function (j) {
+        var box = $('cityResults');
+        box.innerHTML = '';
+        (j.results || []).forEach(function (r) {
+          var b = document.createElement('button');
+          b.className = 'chip focusable';
+          b.textContent = [r.name, r.admin1, r.country].filter(Boolean).join(', ');
+          b.addEventListener('click', function () {
+            hub.set('weather_city', JSON.stringify({ name: r.name, lat: r.latitude, lon: r.longitude }));
+            hub.set('weather_mode', 'manual');
+            toast('Weather set to ' + r.name);
+            refreshWeather(true);
+            fillSettings();
+            $('modeManual').focus();
+          });
+          box.appendChild(b);
+        });
+        if (!box.children.length) box.innerHTML = '<p>No city found. Try another spelling.</p>';
+        else box.children[0].focus();
+      })
+      .catch(function () { $('cityResults').innerHTML = '<p>Search needs the internet. Try again later.</p>'; });
+  });
+  $('cityInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('citySearch').click(); } });
+  $('dashInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('dashSave').click(); } });
+  $('settingsClose').addEventListener('click', closePanel);
+
+  /* ---------- toast ---------- */
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 4200);
+  }
+
+  $('cardDashboard').focus();
+})();
+</script>
+</body>
+</html>

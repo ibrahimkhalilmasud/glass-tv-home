@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mike's TV</title>
+<style>
+  @font-face { font-family: "Outfit"; src: url("outfit.ttf"); font-weight: 100 900; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #03060b; }
+  body {
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    font-family: "Outfit", sans-serif; color: #f5f3ee;
+    background:
+      radial-gradient(60% 55% at 50% 42%, rgba(88, 132, 188, 0.34) 0%, rgba(20, 34, 56, 0.18) 45%, rgba(3, 6, 11, 0) 75%),
+      #03060b;
+    animation: bg-in 900ms ease-out both, bg-out 700ms ease-in 3500ms forwards;
+  }
+  .orb {
+    position: relative; width: 24vmin; height: 24vmin; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(155deg, rgba(255,255,255,0.20), rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.10));
+    border: 0.35vmin solid rgba(255, 255, 255, 0.34);
+    box-shadow: 0 0 9vmin rgba(120, 170, 230, 0.35), inset 0 0.6vmin 1.4vmin rgba(255,255,255,0.28);
+    animation: orb-in 1200ms cubic-bezier(.2,.8,.2,1) 150ms both;
+    overflow: hidden;
+  }
+  .orb::after {
+    content: ""; position: absolute; top: -20%; bottom: -20%; width: 40%; left: -60%;
+    background: linear-gradient(100deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0) 100%);
+    transform: skewX(-18deg); animation: sweep 1500ms ease-in-out 1100ms both;
+  }
+  .orb span { font-size: 14.5vmin; font-weight: 500; line-height: 1; text-shadow: 0 1vmin 2.4vmin rgba(0,0,0,0.45); }
+  h1 {
+    margin-top: 6.5vmin; font-size: 7.4vmin; font-weight: 300; letter-spacing: 0.34em; padding-left: 0.34em;
+    text-shadow: 0 1vmin 3vmin rgba(0,0,0,0.5);
+    animation: word-in 1300ms cubic-bezier(.2,.8,.2,1) 700ms both;
+  }
+  p {
+    margin-top: 2.4vmin; font-size: 2.3vmin; font-weight: 300; letter-spacing: 0.6em; padding-left: 0.6em;
+    text-transform: uppercase; color: rgba(245, 243, 238, 0.58);
+    animation: tag-in 1000ms ease-out 1500ms both;
+  }
+  @keyframes bg-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes bg-out { to { opacity: 0; } }
+  @keyframes orb-in { from { opacity: 0; transform: scale(0.72); filter: blur(1.4vmin); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
+  @keyframes sweep { from { left: -60%; } to { left: 130%; } }
+  @keyframes word-in { from { opacity: 0; letter-spacing: 0.7em; } to { opacity: 1; letter-spacing: 0.34em; } }
+  @keyframes tag-in { from { opacity: 0; transform: translateY(1.2vmin); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+  <div class="orb"><span>M</span></div>
+  <h1>Mike's TV</h1>
+  <p>Welcome home</p>
+</body>
+</html>
