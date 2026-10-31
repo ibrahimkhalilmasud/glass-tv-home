@@ -10,9 +10,14 @@
         tools:ignore="ProtectedPermissions" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Only used if a camera is plugged into the TV box (gesture control from the TV itself). -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.external" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
@@ -40,7 +45,21 @@
             android:excludeFromRecents="true"
             android:theme="@style/HubTheme" />
 
-        <service android:name=".RemoteService" android:exported="false" />
+        <activity
+            android:name=".TvGestureActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/HubTheme" />
+
+        <!-- Android 14+ wants every foreground service to declare what it is for. -->
+        <service
+            android:name=".RemoteService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local-network phone remote and photo receiver for the TV" />
+        </service>
 
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>

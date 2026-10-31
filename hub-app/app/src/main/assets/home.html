@@ -5,9 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
   // Lay the page out at 1920x1080 and zoom it to whatever CSS viewport the TV reports (960 wide at 2x density).
-  (function fit() {
-    document.documentElement.style.zoom = String(window.innerWidth / 1920);
-    window.addEventListener('resize', fit, { once: true });
+  (function () {
+    var LAYOUT_WIDTH = 1920, CHECK_MS = 200, CHECKS = 15;
+    function apply() { document.documentElement.style.zoom = String(window.innerWidth / LAYOUT_WIDTH); }
+    apply();
+    window.addEventListener('resize', apply);
+    window.addEventListener('load', apply);
+    // The WebView can report a wrong width for a moment right after launch, so measure again during startup.
+    var n = 0, timer = setInterval(function () { apply(); if (++n >= CHECKS) clearInterval(timer); }, CHECK_MS);
   })();
 </script>
 <title>TV Hub</title>
@@ -178,19 +183,21 @@
 <div class="overlay" id="remoteOverlay">
   <section class="panel glass">
     <h2>Control the TV from your phone</h2>
-    <div style="display: flex; gap: 64px; align-items: center;">
+    <div style="display: flex; gap: 56px; align-items: center;">
       <div style="background: #fff; padding: 20px; border-radius: 24px; line-height: 0;">
-        <img id="qrImg" alt="QR code for the phone remote" width="360" height="360" style="width: 360px; height: 360px;">
+        <img id="qrImg" alt="QR code for the phone remote, voice and gestures" width="340" height="340" style="width: 340px; height: 340px; image-rendering: pixelated;">
       </div>
       <div>
-        <p>1. Connect the phone to the same Wi-Fi as the TV.</p>
-        <p>2. Scan the code with the phone's camera and open the link.</p>
-        <p>3. Use the buttons: arrows, OK, Back, Home, volume and your apps.</p>
+        <p style="font-size: 24px;">1. Connect the phone to the same Wi-Fi as the TV.</p>
+        <p style="font-size: 24px;">2. Scan this one code with the phone's camera.</p>
+        <p style="font-size: 24px;">3. Use the remote and the keyboard right away. For <b>voice</b> and <b>hand gestures</b>, tap the banner on the phone (your browser warns once: Advanced, then Continue).</p>
+        <p class="note" id="camStatus"></p>
         <p class="note" id="remoteUrl"></p>
       </div>
     </div>
     <div class="row">
       <button class="btn primary focusable" id="remoteClose">Done</button>
+      <button class="btn focusable" id="tvCamBtn" style="display: none;">Use the TV's camera</button>
       <button class="btn focusable" id="remoteReset">New link (signs out all phones)</button>
     </div>
   </section>
@@ -449,12 +456,23 @@
       $('remoteUrl').textContent = 'No network connection';
       return;
     }
-    var qr = qrcode(0, 'M');
-    qr.addData(info.url);
-    qr.make();
-    $('qrImg').src = qr.createDataURL(8, 2);
+    drawQr($('qrImg'), info.url);
     $('remoteUrl').textContent = info.running === false ? 'The remote is not running. Restart the TV.' : '';
+    var cam = {};
+    try { cam = JSON.parse(hub.cameraInfo()); } catch (e) { /* no camera info */ }
+    var hasCamera = cam.count > 0;
+    $('camStatus').textContent = hasCamera ? 'A camera is plugged into the TV: hand gestures can use it.'
+      : cam.usbVideo ? 'A USB camera is attached but Android cannot use it, so gestures use your phone camera.'
+      : 'No camera on the TV, so hand gestures use your phone camera.';
+    $('tvCamBtn').style.display = hasCamera ? '' : 'none';
   }
+  function drawQr(img, url) {
+    var qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    img.src = qr.createDataURL(8, 2);
+  }
+  $('tvCamBtn').addEventListener('click', function () { if (!hub.openTvGestures()) toast('No camera found on the TV'); });
   $('remoteClose').addEventListener('click', closePanel);
   $('remoteReset').addEventListener('click', function () {
     hub.resetRemote();

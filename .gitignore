@@ -11,3 +11,6 @@ keys/
 local.properties
 **/build/
 .gradle/
+
+# Downloaded by tools/fetch_mediapipe.py (22 MB)
+hub-app/app/src/main/assets/mp/

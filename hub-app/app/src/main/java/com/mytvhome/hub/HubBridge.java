@@ -2,8 +2,14 @@ package com.mytvhome.hub;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraManager;
+import android.hardware.usb.UsbConstants;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.webkit.JavascriptInterface;
 
 import org.json.JSONException;
@@ -79,13 +85,61 @@ class HubBridge {
         JSONObject o = new JSONObject();
         try {
             String ip = localIp();
-            o.put("url", ip == null ? "" : "http://" + ip + ":" + MainActivity.PHOTO_PORT + "/r#"
-                    + activity.photoServer().remoteToken());
+            String token = activity.photoServer().remoteToken();
+            o.put("url", ip == null ? "" : "http://" + ip + ":" + MainActivity.PHOTO_PORT + "/r#" + token);
+            // Phone browsers only allow the camera and microphone on https pages.
+            o.put("secureUrl", ip == null || !activity.photoServer().isSecureRunning()
+                    ? "" : "https://" + ip + ":" + TlsSupport.HTTPS_PORT + "/r#" + token);
             o.put("running", activity.photoServer().isRunning());
         } catch (JSONException ignored) {
             // Plain strings and booleans only.
         }
         return o.toString();
+    }
+
+    /** {"count": cameras Android can use, "usbVideo": a USB video device is plugged in} for the gesture card. */
+    @JavascriptInterface
+    public String cameraInfo() {
+        if (!activity.onHomePage()) return "{}";
+        JSONObject o = new JSONObject();
+        int count = 0;
+        boolean usbVideo = false;
+        try {
+            CameraManager cm = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+            if (cm != null) count = cm.getCameraIdList().length;
+        } catch (CameraAccessException | RuntimeException ignored) {
+            // No camera service: count stays 0.
+        }
+        UsbManager usb = (UsbManager) activity.getSystemService(Context.USB_SERVICE);
+        if (usb != null) {
+            for (UsbDevice d : usb.getDeviceList().values()) {
+                if (d.getDeviceClass() == UsbConstants.USB_CLASS_VIDEO) usbVideo = true;
+                for (int i = 0; i < d.getInterfaceCount(); i++) {
+                    if (d.getInterface(i).getInterfaceClass() == UsbConstants.USB_CLASS_VIDEO) usbVideo = true;
+                }
+            }
+        }
+        try {
+            o.put("count", count);
+            o.put("usbVideo", usbVideo);
+        } catch (JSONException ignored) {
+            // Plain numbers and booleans only.
+        }
+        return o.toString();
+    }
+
+    /** Starts gesture control from the TV's own camera; false when there is none. */
+    @JavascriptInterface
+    public boolean openTvGestures() {
+        if (!activity.onHomePage()) return false;
+        try {
+            CameraManager cm = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+            if (cm == null || cm.getCameraIdList().length == 0) return false;
+        } catch (CameraAccessException | RuntimeException e) {
+            return false;
+        }
+        activity.runOnUiThread(() -> activity.startActivity(new Intent(activity, TvGestureActivity.class)));
+        return true;
     }
 
     /** Makes every phone that scanned the old QR code stop working; the next QR code is new. */

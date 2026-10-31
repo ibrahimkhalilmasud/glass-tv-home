@@ -36,20 +36,38 @@
   .apps button { height: 52px; font-size: 16px; }
   .panel { padding: 22px 16px 14px; }
   .typebox { display: flex; gap: 10px; margin-top: 4px; }
-  #typed {
+  #typed, #cmd {
     flex: 1; min-width: 0; font: inherit; font-size: 18px; color: var(--ink); padding: 14px 16px; height: 56px;
     background: rgba(0,0,0,0.28); border: 1px solid var(--edge); border-radius: 18px; outline: none;
     user-select: text; -webkit-user-select: text;
   }
-  #typed:focus { border-color: rgba(243,230,200,0.7); }
+  #typed:focus, #cmd:focus { border-color: rgba(243,230,200,0.7); }
   .typebox button { width: 88px; flex: none; }
   .hint { font-size: 13px; color: var(--soft); margin: 8px 4px 0; line-height: 1.4; }
+  .banner { display: block; width: 100%; height: auto; padding: 14px 16px; margin: 0 0 16px; text-align: left; font-size: 17px;
+    background: rgba(243,230,200,0.16); border-color: rgba(243,230,200,0.55); }
+  .banner[hidden] { display: none; }
+  .banner small { display: block; font-size: 12.5px; color: var(--soft); margin-top: 4px; line-height: 1.35; }
+  .microw { display: flex; gap: 10px; margin-top: 4px; }
+  .microw button { flex: 1; height: 64px; font-size: 19px; }
+  #micBtn.live { background: rgba(255,120,120,0.35); border-color: rgba(255,160,160,0.85); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 10px rgba(255,120,120,0); } }
+  .say { font-size: 15px; margin: 10px 4px 0; min-height: 20px; }
+  .secure { text-decoration: underline; color: var(--accent); }
+  .cam { display: none; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 18px; margin-top: 12px;
+    background: #000; transform: scaleX(-1); }
+  .cam.on { display: block; }
+  .pose { font-size: 15px; margin: 8px 4px 0; color: var(--accent); min-height: 20px; }
+  .touchpad { height: 150px; border-radius: 24px; border: 1px dashed var(--edge); display: flex; align-items: center;
+    justify-content: center; color: var(--soft); font-size: 14px; touch-action: none; margin-top: 4px; }
 </style>
 </head>
 <body>
 <main>
   <h1>TV Remote</h1>
   <div class="status" id="status">Ready</div>
+  <button class="banner" id="secureBanner" hidden>🎤 ✋ Turn on voice and hand gestures
+    <small>Opens the secure version of this page. Your browser warns once: tap Advanced, then Continue.</small></button>
 
   <div class="glass panel">
     <div class="pad">
@@ -87,6 +105,25 @@
   <div class="hint">On the TV, open the search box first (for example YouTube &rsaquo; Search). Everything you type here
     appears there as you type. <b id="typeClear" style="text-decoration: underline;">Clear</b></div>
 
+  <div class="label">Voice</div>
+  <div class="typebox">
+    <input id="cmd" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+           enterkeyhint="go" placeholder="Say or type a command">
+    <button id="cmdGo">Go</button>
+  </div>
+  <div class="microw"><button id="micBtn">🎤 Tap and speak</button></div>
+  <div class="say" id="say"></div>
+  <div class="hint">Try: "open YouTube", "volume up", "go home", "pause", "scroll down", "search for lofi". The keyboard's own microphone also works in the box above.</div>
+
+  <div class="label">Hand gestures</div>
+  <div class="microw"><button id="gestBtn">✋ Start camera gestures</button></div>
+  <video id="cam" class="cam" playsinline muted></video>
+  <div class="pose" id="pose"></div>
+  <div class="hint">Swipe your hand to move · hold ✋ play/pause · ✊ OK · ✌ back · 👍 volume up · 👎 volume down. Hold the phone still, facing you.</div>
+
+  <div class="label">Touchpad</div>
+  <div class="touchpad" id="touchpad">Swipe to move · tap for OK</div>
+
   <div class="label">Open an app</div>
   <div class="apps">
     <button data-app="com.google.android.youtube.tv">YouTube</button>
@@ -97,6 +134,9 @@
     <button data-app="com.mytvhome.hub">TV Hub</button>
   </div>
 </main>
+<script src="/s/commands.js"></script>
+<script src="/s/classify.js"></script>
+<script src="/s/engine.js"></script>
 <script>
 (function () {
   'use strict';
@@ -127,6 +167,102 @@
     busy = true;
     return send('/key', key).then(function (ok) { busy = false; return ok; });
   }
+
+  /* ---- voice commands, hand gestures and the touchpad ---- */
+  var KEY_GAP_MS = 140, TOUCH_STEP_PX = 46, POSE_SHOW_MS = 1500;
+  var sayEl = document.getElementById('say'), secure = window.isSecureContext;
+  var banner = document.getElementById('secureBanner');
+  if (!secure) {
+    banner.hidden = false;
+    banner.addEventListener('click', function () { location.href = secureLink(); });
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function secureLink() { return 'https://' + location.hostname + ':8091/r' + location.hash; }
+  function needSecure(el, what) {
+    el.innerHTML = what + ' needs the secure link. <span class="secure" id="goSecure">Open it</span> ' +
+      '(your browser warns once: tap Advanced, then Continue).';
+    document.getElementById('goSecure').addEventListener('click', function () { location.href = secureLink(); });
+  }
+
+  function runActions(actions) {
+    return actions.reduce(function (chain, a) {
+      return chain.then(function () {
+        if (a.type === 'key') {
+          var inner = Promise.resolve();
+          for (var i = 0; i < (a.repeat || 1); i++) inner = inner.then(function () { return send('/key', a.key); }).then(function () { return sleep(KEY_GAP_MS); });
+          return inner;
+        }
+        if (a.type === 'app') return send('/app', a.pkg);
+        if (a.type === 'text') return send('/text', JSON.stringify({ del: 0, add: a.add }));
+        return null;
+      });
+    }, Promise.resolve());
+  }
+  function runCommand(text) {
+    var r = TvCommands.parse(text);
+    sayEl.textContent = '“' + text.trim() + '” → ' + r.say;
+    return runActions(r.actions);
+  }
+  var cmd = document.getElementById('cmd');
+  document.getElementById('cmdGo').addEventListener('click', function () { if (cmd.value.trim()) { runCommand(cmd.value); cmd.value = ''; } });
+  cmd.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('cmdGo').click(); } });
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, micBtn = document.getElementById('micBtn');
+  micBtn.addEventListener('click', function () {
+    if (!SR) { sayEl.textContent = 'This browser has no speech recognition. Use the box above: your keyboard\'s microphone works there.'; return; }
+    if (!secure) { needSecure(sayEl, 'The microphone'); return; }
+    if (rec) { rec.stop(); return; }
+    var heard = '';
+    rec = new SR();
+    rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    rec.onstart = function () { micBtn.classList.add('live'); micBtn.textContent = 'Listening… tap to stop'; sayEl.textContent = ''; };
+    rec.onresult = function (e) {
+      var t = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) { t += e.results[i][0].transcript; if (e.results[i].isFinal) heard = t; }
+      sayEl.textContent = '“' + t + '”';
+    };
+    rec.onerror = function (e) {
+      sayEl.textContent = e.error === 'not-allowed' ? 'The microphone is blocked. Allow it for this site in the browser.'
+        : e.error === 'no-speech' ? 'I did not hear anything.' : 'Voice error: ' + e.error;
+    };
+    rec.onend = function () {
+      micBtn.classList.remove('live'); micBtn.textContent = '🎤 Tap and speak'; rec = null;
+      if (heard) runCommand(heard);
+    };
+    rec.start();
+  });
+
+  var gest = null, gestBtn = document.getElementById('gestBtn'), cam = document.getElementById('cam'), poseEl = document.getElementById('pose'), shownAt = 0;
+  function gestOff() { if (gest) gest.stop(); gest = null; cam.classList.remove('on'); gestBtn.textContent = '✋ Start camera gestures'; gestBtn.disabled = false; }
+  gestBtn.addEventListener('click', function () {
+    if (gest) { gestOff(); poseEl.textContent = ''; return; }
+    if (!secure || !navigator.mediaDevices) { needSecure(poseEl, 'The camera'); return; }
+    gestBtn.disabled = true;
+    TvEngine.start({
+      video: cam, mirror: true,
+      onStatus: function (s) { poseEl.textContent = s; },
+      onFrame: function (p) { if (performance.now() - shownAt > POSE_SHOW_MS) poseEl.textContent = p ? 'Seeing: ' + p : 'Show your hand'; },
+      onAction: function (a) { shownAt = performance.now(); poseEl.textContent = a.say; send('/key', a.key); }
+    }).then(function (h) {
+      gest = h; cam.classList.add('on'); gestBtn.textContent = '⏹ Stop camera gestures'; gestBtn.disabled = false;
+    }).catch(function (e) {
+      gestBtn.disabled = false;
+      poseEl.textContent = e && e.name === 'NotAllowedError' ? 'The camera is blocked. Allow it for this site in the browser.'
+        : 'Could not start the camera: ' + (e && (e.message || e.name));
+    });
+  });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && gest) { gestOff(); poseEl.textContent = 'Camera stopped.'; } });
+
+  var pad = document.getElementById('touchpad'), px = 0, py = 0, moved = false;
+  pad.addEventListener('pointerdown', function (e) { px = e.clientX; py = e.clientY; moved = false; pad.setPointerCapture(e.pointerId); });
+  pad.addEventListener('pointermove', function (e) {
+    var dx = e.clientX - px, dy = e.clientY - py;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < TOUCH_STEP_PX) return;
+    moved = true;
+    press(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+    px = e.clientX; py = e.clientY;
+  });
+  pad.addEventListener('pointerup', function () { if (!moved) press('ok'); });
 
   /* ---- live typing: send only what changed since the last successful send ---- */
   var typed = document.getElementById('typed'), sentText = '', typing = false, again = false;

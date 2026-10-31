@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TV camera gestures</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: #04070c; color: #f5f3ee; overflow: hidden;
+    font-family: system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.4vmin; }
+  video { width: 36vmin; height: 27vmin; object-fit: cover; border-radius: 3vmin; background: #000; transform: scaleX(-1);
+    border: 0.3vmin solid rgba(255,255,255,0.25); box-shadow: 0 0 6vmin rgba(120,170,230,0.25); }
+  h1 { font-size: 5vmin; font-weight: 300; margin: 0; letter-spacing: 0.1em; }
+  #status { font-size: 3vmin; color: rgba(245,243,238,0.75); min-height: 4vmin; }
+  #action { font-size: 4.4vmin; color: #f3e6c8; min-height: 6vmin; }
+  .help { font-size: 2.4vmin; color: rgba(245,243,238,0.55); text-align: center; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <h1>Hand gestures</h1>
+  <video id="cam" playsinline muted></video>
+  <div id="status">Starting…</div>
+  <div id="action"></div>
+  <div class="help">Swipe your hand to move · hold an open palm to play/pause · fist = OK · peace sign = back<br>
+    thumbs up / down = volume · press Back on the remote to close</div>
+<script src="/s/classify.js"></script>
+<script src="/s/engine.js"></script>
+<script>
+(function () {
+  'use strict';
+  var token = (location.hash || '').replace(/^#/, '');
+  var statusEl = document.getElementById('status'), actionEl = document.getElementById('action');
+  var shownAt = 0, ACTION_SHOW_MS = 1500;
+  function send(key) {
+    return fetch('/key', { method: 'POST', headers: { 'X-Remote': token, 'Content-Type': 'text/plain' }, body: key }).catch(function () {});
+  }
+  TvEngine.start({
+    video: document.getElementById('cam'), mirror: true,
+    onStatus: function (s) { statusEl.textContent = s; },
+    onFrame: function (pose) {
+      if (performance.now() - shownAt > ACTION_SHOW_MS) { actionEl.textContent = pose ? 'Seeing: ' + pose : ''; }
+    },
+    onAction: function (a) { shownAt = performance.now(); actionEl.textContent = a.say; send(a.key); }
+  }).catch(function (e) {
+    statusEl.textContent = e && e.name === 'NotAllowedError' ? 'Camera permission was refused.' : 'No usable camera: ' + (e && (e.message || e.name));
+  });
+})();
+</script>
+</body>
+</html>

@@ -165,6 +165,15 @@ Settings), the glass Outfit styling, and obey the remote (focus ring, Back close
   Test it inside YouTube: Home > guest (never pick an account) > up > RIGHT to the Search pill (up alone
   lands on the microphone and starts voice search, which pollutes the field) > OK, then POST `/text` and
   check the text in the field by screenshot.
+- Voice and gestures (v1.1): before building run `python glass-tv-home/tools/fetch_mediapipe.py` (22 MB, checksum
+  verified) and `node --test glass-tv-home/tests/js/web.test.js` (must pass). TV Hub then serves the phone page
+  on http :8090 and https :8091 (self-signed, generated on the box; NOT 8443, Chromecast owns that). One QR code
+  (the http link) is shown; the page offers a banner that moves to https for the microphone and camera. Verify
+  with `curl -sk https://<tv ip>:8091/r` and by driving the page in a headless browser against the TV: type
+  "go home", "open netflix", "open settings" into the command box and check `mResumedActivity` each time. Check
+  the Phone remote panel says whether the TV has a camera (`CameraManager`); if it does, test "Use the TV's
+  camera" and say plainly that you could not test it if no camera is attached. Never claim gestures or voice
+  work on a live phone unless you saw it.
 - Settings tile: build `glass-tv-home/settings-app` (`com.mytvhome.settings`, one activity that opens
   `Settings.ACTION_SETTINGS`), install it, add its glass tile (`banner_settings`) to the launcher
   `app_banners`, and make it the LAST entry of `dock_apps` (put every dock app in explicit order).

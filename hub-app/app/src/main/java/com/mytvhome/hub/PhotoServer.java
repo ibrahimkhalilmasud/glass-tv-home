@@ -16,6 +16,8 @@ import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * A tiny LAN-only HTTP server that runs while TV Hub is open. The phone opens http://<tv ip>:8090, picks a
@@ -101,6 +103,13 @@ class PhotoServer {
     private final int port;
     private final SecureRandom random = new SecureRandom();
     private volatile ServerSocket socket;
+    private volatile ServerSocket tlsSocket;
+    // Several phone requests at once (a big .wasm download must not block a key press).
+    private final ExecutorService pool = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "tvhub-http");
+        t.setDaemon(true);
+        return t;
+    });
     private volatile String code;
     private volatile Listener listener;
     private int failedCodes;
@@ -151,27 +160,52 @@ class PhotoServer {
         Thread t = new Thread(() -> serve(s), "photo-server");
         t.setDaemon(true);
         t.start();
+        ServerSocket tls = TlsSupport.listen(TlsSupport.HTTPS_PORT);
+        if (tls != null) {
+            tlsSocket = tls;
+            Thread tt = new Thread(() -> serve(tls), "photo-server-tls");
+            tt.setDaemon(true);
+            tt.start();
+        }
+    }
+
+    /** True when the https address (needed for the phone's camera and microphone) is up. */
+    boolean isSecureRunning() {
+        ServerSocket s = tlsSocket;
+        return s != null && !s.isClosed();
     }
 
     synchronized void stop() {
-        ServerSocket s = socket;
-        socket = null;
-        if (s == null) return;
-        try {
-            s.close();
-        } catch (IOException ignored) {
-            // Closing anyway.
+        for (ServerSocket s : new ServerSocket[] {socket, tlsSocket}) {
+            if (s == null) continue;
+            try {
+                s.close();
+            } catch (IOException ignored) {
+                // Closing anyway.
+            }
         }
+        socket = null;
+        tlsSocket = null;
     }
 
     private void serve(ServerSocket s) {
         while (!s.isClosed()) {
-            try (Socket c = s.accept()) {
-                c.setSoTimeout(SOCKET_TIMEOUT_MS);
-                handle(c.getInputStream(), c.getOutputStream());
+            try {
+                Socket c = s.accept();
+                pool.execute(() -> handleSocket(c));
             } catch (IOException e) {
-                if (!s.isClosed()) Log.w(TAG, "request failed", e);
+                if (!s.isClosed()) Log.w(TAG, "accept failed", e);
             }
+        }
+    }
+
+    private void handleSocket(Socket c) {
+        try (Socket sock = c) {
+            sock.setSoTimeout(SOCKET_TIMEOUT_MS);
+            handle(sock.getInputStream(), sock.getOutputStream());
+        } catch (IOException e) {
+            // A browser that rejects our self-signed certificate hangs up mid-handshake; that is expected.
+            Log.d(TAG, "request failed: " + e.getMessage());
         }
     }
 
@@ -191,6 +225,14 @@ class PhotoServer {
         }
         if ("GET".equals(method) && ("/r".equals(path) || path.startsWith("/r?"))) {
             servePage(out, "remote.html");
+            return;
+        }
+        if ("GET".equals(method) && ("/g".equals(path) || path.startsWith("/g?"))) {
+            servePage(out, "g.html");
+            return;
+        }
+        if ("GET".equals(method) && WebAssets.handles(path)) {
+            WebAssets.serve(context, path, out);
             return;
         }
         if ("POST".equals(method) && ("/key".equals(path) || "/app".equals(path) || "/text".equals(path))) {
@@ -370,7 +412,7 @@ class PhotoServer {
         return "";
     }
 
-    private static void respond(OutputStream out, int status, String type, String body) throws IOException {
+    static void respond(OutputStream out, int status, String type, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         String head = "HTTP/1.1 " + status + " " + reason(status) + "\r\n"
                 + "Content-Type: " + type + "\r\n"

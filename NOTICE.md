@@ -9,6 +9,7 @@ The original code in this repository is MIT licensed (see `LICENSE`). It builds 
 | [cleanyourtv](https://github.com/Gathin23/cleanyourtv), the launcher (`com.gathin.tvhome`). This repo contains only a patch and images for it (`launcher-patch/`, `design/out/`), not its source. | built from its repo, revision `baadd07a` | MIT, Copyright (c) 2026 Gathin |
 | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) 1.4.4, `hub-app/app/src/main/assets/qr.js` | TV Hub QR code | MIT, Copyright (c) Kazuhiko Arase |
 | [Outfit](https://github.com/Outfitio/Outfit-Fonts), `hub-app/app/src/main/assets/outfit.ttf` | fonts in TV Hub and the tiles | SIL Open Font License 1.1 (`hub-app/FONT-LICENSE-OFL.txt`) |
+| [MediaPipe Tasks Vision](https://www.npmjs.com/package/@mediapipe/tasks-vision) 1.2.0 and the `hand_landmarker.task` model, Google | hand tracking; downloaded and checksum-verified by `tools/fetch_mediapipe.py`, not stored in this repo | Apache 2.0 |
 | Gradle wrapper | build | Apache 2.0 |
 | [Open-Meteo](https://open-meteo.com/) weather and geocoding API | queried at run time | data CC BY 4.0; see their terms of use |
 
